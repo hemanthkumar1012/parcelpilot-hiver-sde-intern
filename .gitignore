@@ -8,3 +8,11 @@ __pycache__/
 venv/
 .DS_Store
 *.log
+
+# Large raw assessment dataset — keep local, never commit to Git
+/data/raw/*
+!/data/raw/README.md
+
+# Generated processed datasets — reproducible, but do not commit bulk CSVs
+/data/processed/*
+!/data/processed/README.md

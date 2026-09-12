@@ -9,8 +9,10 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     model: str = 'gpt-5.6-luna'
     top_k: int = 5
+    brand: str = 'AppleSupport'
     data_dir: Path = ROOT / 'data'
     knowledge_dir: Path = ROOT / 'knowledge_base'
+    twcs_csv: Path = ROOT / 'data' / 'raw' / 'twcs.csv'
 
 
 settings = Settings()

@@ -1,0 +1,21 @@
+{
+  "version": "0.2",
+  "status": "data_derived_hypothesis",
+  "brand": "AmazonHelp",
+  "note": "These are working intent hypotheses derived from observed AmazonHelp TWCS traffic. They must be human-reviewed before becoming golden-set ground truth.",
+  "intents": [
+    {"id": "delivery_tracking", "description": "Delivery status, tracking, delayed shipment, missing parcel, or delivered-but-not-received issue."},
+    {"id": "order_problem", "description": "Order-specific problem such as wrong item, incorrect destination, order change, cancellation, or order details."},
+    {"id": "returns_refunds", "description": "Return, refund, replacement, or reimbursement request for an order or purchase."},
+    {"id": "payments_billing", "description": "Payment, charge, billing, Amazon Payments, or unexpected transaction issue."},
+    {"id": "account_access", "description": "Account access, sign-in, password, account closure, verification, or account-related issue."},
+    {"id": "prime_membership", "description": "Prime membership, Prime trial, renewal, cancellation, or Prime membership charge."},
+    {"id": "digital_content", "description": "Prime Video, Kindle, digital purchase, streaming, playback, or digital-content issue."},
+    {"id": "device_technical", "description": "Echo, Kindle, Fire TV, or other Amazon device malfunction or troubleshooting issue."},
+    {"id": "app_website", "description": "Amazon app, website, checkout interface, or software functionality problem."},
+    {"id": "product_information", "description": "Question about a product, availability, price, preorder, delivery estimate, or product-page information."},
+    {"id": "general_support", "description": "Support request that does not fit a more specific intent or requires additional context."},
+    {"id": "feedback_complaint", "description": "General feedback or complaint without a clearly actionable support intent."},
+    {"id": "unknown", "description": "Insufficient information, unsupported request, or genuinely ambiguous intent."}
+  ]
+}
