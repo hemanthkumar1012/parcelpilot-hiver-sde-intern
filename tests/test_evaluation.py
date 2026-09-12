@@ -1,5 +1,5 @@
 from evaluation.leakage import inspect_examples
-from evaluation.metrics import EvaluationResult, EvaluationSummary
+from evaluation.metrics import EvaluationResult, summarize
 
 
 def test_leakage_detects_exact_duplicates():
@@ -13,11 +13,11 @@ def test_leakage_detects_exact_duplicates():
 
 def test_summary_computes_means():
     results = [
-        EvaluationResult("a", True, 1.0, 1.0, 0.5, 1.0, True),
-        EvaluationResult("b", False, 0.0, 0.0, 1.0, 0.0, False),
+        EvaluationResult("a", True, True, False, True),
+        EvaluationResult("b", False, False, True, False),
     ]
-    summary = EvaluationSummary.from_results(results)
+    summary = summarize(results)
     assert summary.total == 2
     assert summary.accuracy == 0.5
     assert summary.groundedness == 0.5
-    assert summary.completeness == 0.75
+    assert summary.completeness == 0.5
