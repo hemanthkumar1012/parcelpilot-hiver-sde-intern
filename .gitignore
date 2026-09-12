@@ -8,3 +8,7 @@ __pycache__/
 venv/
 .DS_Store
 *.log
+
+# Large raw assessment dataset — keep local, never commit to Git
+/data/raw/*
+!/data/raw/README.md
