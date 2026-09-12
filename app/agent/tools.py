@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 import pandas as pd
 
+from app.retrieval.retriever import SupportRetriever
+
 
 @dataclass
 class ToolResult:
@@ -21,6 +23,7 @@ class SupportTools:
     def __init__(self, tables: dict[str, pd.DataFrame] | None = None, documents: list[dict[str, Any]] | None = None):
         self.tables = tables or {}
         self.documents = documents or []
+        self.retriever = SupportRetriever(self.documents, self.tables)
 
     def table_lookup(self, sheet: str, field: str, value: str) -> ToolResult:
         df = self.tables.get(sheet)
@@ -33,15 +36,8 @@ class SupportTools:
         return ToolResult('table_lookup', True, rows, f'{len(rows)} matching rows')
 
     def search_documents(self, query: str, limit: int = 5) -> ToolResult:
-        terms = {_norm(t) for t in query.split() if len(t) > 2}
-        scored = []
-        for doc in self.documents:
-            text = _norm(doc.get('text', ''))
-            score = sum(term in text for term in terms)
-            if score:
-                scored.append((score, doc))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return ToolResult('document_search', True, [doc for _, doc in scored[:limit]], f'{min(limit, len(scored))} documents')
+        hits = self.retriever.search_documents(query, top_k=limit)
+        return ToolResult('document_search', True, hits, f'{len(hits)} ranked evidence chunks')
 
     def available_tools(self) -> list[str]:
         return ['table_lookup', 'document_search']
