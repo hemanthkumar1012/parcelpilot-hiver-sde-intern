@@ -1,55 +1,106 @@
-# ParcelPilot Hiver SDE Intern
+# ParcelPilot — Hiver SDE Intern
 
-Hiver SDE Intern assignment workspace built from the ParcelPilot support-agent foundation.
+An evidence-first AI customer-support agent built from the ParcelPilot foundation, with reproducible evaluation as a first-class feature.
 
-## Goal
+## What is implemented
 
-Build an evidence-first AI customer-support agent and demonstrate that it works through reproducible evaluation, golden-set testing, LLM-as-judge, and failure analysis.
+- FastAPI `/chat` and `/health` service
+- Workbook and PDF ingestion
+- TF-IDF retrieval with explicit source-authority precedence
+- Safe operational table lookup
+- Evidence passed to the LLM rather than free-form guessing
+- Structured OpenAI Responses API generation
+- Structured LLM-as-judge schema
+- Golden-set evaluator and deterministic checks
+- Failure taxonomy and failure-summary utilities
+- Data-independent smoke tests
+- GitHub Actions CI
+- Explicit data boundary so missing assessment assets are never fabricated
 
-## Repository boundary
+The OpenAI implementation uses the Responses API pattern documented by OpenAI. citeturn0search0turn0search1
 
-This repository is intentionally separate from the original ParcelPilot repositories. Hiver-specific work belongs here; the original ParcelPilot projects remain unchanged.
-
-## Planned system
+## Architecture
 
 ```text
-Support dataset
-      |
-      v
-Data understanding / cleaning
-      |
-      +--> Baseline
-      |
-      v
-Support agent
-  + retrieval
-  + operational tools
-  + policy precedence
-  + grounded answer generation
-      |
-      v
-Golden-set evaluation
-      |
-      +--> LLM-as-judge
-      +--> deterministic checks
-      +--> failure categories
-      |
-      v
-Failure analysis --> Agent improvements --> Re-evaluation
+                    +-------------------+
+                    | Support question  |
+                    +---------+---------+
+                              |
+                              v
+                    +-------------------+
+                    | FastAPI /chat     |
+                    +---------+---------+
+                              |
+                +-------------+-------------+
+                |                           |
+                v                           v
+       +----------------+          +----------------+
+       | Retrieval      |          | Table tools    |
+       | TF-IDF         |          | account/order  |
+       | authority      |          | ticket data   |
+       +-------+--------+          +-------+--------+
+               |                           |
+               +-------------+-------------+
+                             |
+                             v
+                    +-------------------+
+                    | Evidence context  |
+                    +---------+---------+
+                              |
+                              v
+                    +-------------------+
+                    | LLM response      |
+                    | grounded policy   |
+                    +---------+---------+
+                              |
+                              v
+                    +-------------------+
+                    | Golden set        |
+                    | deterministic     |
+                    | LLM-as-judge      |
+                    +---------+---------+
+                              |
+                              v
+                    +-------------------+
+                    | Failure analysis  |
+                    +-------------------+
 ```
 
-## Current source assets
+## Evaluation philosophy
 
-The ParcelPilot AI support-agent implementation already provides account-scoped lookup, document retrieval, policy/source precedence, SLA reasoning, action preparation, confirmation gating, a FastAPI service, a browser UI, tests, PDFs, and a workbook. The integrated ParcelPilot platform additionally provides a FastAPI/PostgreSQL application and authenticated chat surface.
+A single aggregate score is not enough. The evaluation should expose correctness, groundedness, completeness, relevance, policy compliance, isolation, abstention, retrieval quality, and failure categories. Easy examples must not hide failures on ambiguous, adversarial, conflicting, or unsupported requests.
 
-The Hiver project will retain the strongest reusable pieces while making evaluation and experimental evidence first-class.
+The golden set is intentionally empty until the actual assessment data and expected answers are available. Do not fabricate benchmark labels.
 
-## Data safety
+## Run
 
-Do not commit real API keys, `.env` files, credentials, or generated secrets. Public assessment/sample data may be included when appropriate.
+```bash
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
 
-## Status
+Then open `/docs` and call `POST /chat`.
 
-Phase 0: repository initialized.
+For evaluation:
 
-Phase 1: source audit and Hiver architecture underway.
+```bash
+python -m evaluation.evaluate_agent
+```
+
+For tests:
+
+```bash
+pytest -q
+```
+
+## Environment
+
+Copy `.env.example` to `.env` and provide an API key when running the LLM-backed agent. Never commit `.env`.
+
+## Data
+
+Put authorized assessment assets under `data/` and `knowledge_base/`. The repository does not invent missing customer records or benchmark labels.
+
+## Current limitation
+
+The codebase is ready for the real assessment assets, but final data-dependent results cannot honestly be produced until the actual Hiver/ParcelPilot workbook, PDFs, and assignment-specific benchmark information are supplied. That is deliberate: evaluation numbers without the real dataset would be fabricated.
