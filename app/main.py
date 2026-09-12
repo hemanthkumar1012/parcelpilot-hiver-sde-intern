@@ -1,40 +1,56 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+import pandas as pd
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from app.agent.agent import SupportAgent
-from app.agent.tools import SupportTools
+from app.agent.twitter_agent import TwitterSupportAgent
 from app.config import settings
-from app.data_loader import discover_assets, load_pdfs, load_workbook
+from app.retrieval.twitter_retriever import HistoricalReplyRetriever
+from app.twitter_data import TwitterSupportDataset
 
-app = FastAPI(title='ParcelPilot Hiver SDE Support Agent', version='0.1.0')
+app = FastAPI(title="Hiver SDE Intern - AI Support Agent", version="1.0.0")
 
 
-def build_agent() -> SupportAgent:
-    assets = discover_assets(settings.data_dir, settings.knowledge_dir)
-    tables = {}
-    if assets['workbooks']:
-        tables = load_workbook(assets['workbooks'][0])
-    documents = load_pdfs(settings.knowledge_dir)
-    return SupportAgent(SupportTools(tables=tables, documents=documents))
+ROOT = Path(__file__).resolve().parents[1]
+INTENT_PATH = ROOT / "evaluation" / "intent_taxonomy_v0.json"
+TRAIN_PATH = ROOT / "data" / "processed" / "support_pairs_train.jsonl"
 
-agent = build_agent()
+
+def load_intents() -> list[dict]:
+    data = json.loads(INTENT_PATH.read_text(encoding="utf-8"))
+    return data.get("intents", [])
+
+
+def load_pairs() -> pd.DataFrame:
+    if TRAIN_PATH.exists():
+        return pd.read_json(TRAIN_PATH, lines=True)
+    dataset = TwitterSupportDataset(settings.twcs_csv, settings.brand)
+    return dataset.customer_messages()
+
+
+_pairs = load_pairs()
+_agent = TwitterSupportAgent(HistoricalReplyRetriever(_pairs), load_intents())
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=10000)
-    account_id: str | None = None
-    user_role: str = 'customer'
+    message: str = Field(min_length=1, max_length=5000)
 
 
-@app.get('/health')
+@app.get("/health")
 def health() -> dict:
-    assets = discover_assets(settings.data_dir, settings.knowledge_dir)
-    return {'status': 'ok', 'data_assets_present': bool(assets['workbooks'] or assets['pdfs']), 'workbooks': len(assets['workbooks']), 'pdfs': len(assets['pdfs'])}
+    return {
+        "status": "ok",
+        "brand": settings.brand,
+        "dataset_present": settings.twcs_csv.exists(),
+        "historical_pairs_loaded": len(_pairs),
+        "model": settings.model,
+    }
 
 
-@app.post('/chat')
+@app.post("/chat")
 def chat(request: ChatRequest) -> dict:
-    return agent.answer(request.message, request.account_id, request.user_role)
+    return _agent.answer(request.message)
