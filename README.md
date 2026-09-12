@@ -1,106 +1,197 @@
-# ParcelPilot — Hiver SDE Intern
+# Hiver SDE Intern — AI Support Agent
 
-An evidence-first AI customer-support agent built from the ParcelPilot foundation, with reproducible evaluation as a first-class feature.
+A reproducible AI customer-support system built for the Hiver take-home assignment.
 
-## What is implemented
+## Assignment framing
 
-- FastAPI `/chat` and `/health` service
-- Workbook and PDF ingestion
-- TF-IDF retrieval with explicit source-authority precedence
-- Safe operational table lookup
-- Evidence passed to the LLM rather than free-form guessing
-- Structured OpenAI Responses API generation
-- Structured LLM-as-judge schema
-- Golden-set evaluator and deterministic checks
-- Failure taxonomy and failure-summary utilities
-- Data-independent smoke tests
-- GitHub Actions CI
-- Explicit data boundary so missing assessment assets are never fabricated
+The system uses the **Customer Support on Twitter (TWCS)** dataset and focuses on one brand. The current first-pass choice is **AppleSupport** because the dataset contains substantial support traffic for that brand. The brand choice is a decision, not a ground-truth assumption, and will be revisited after dataset audit.
 
-The OpenAI implementation uses the Responses API pattern documented by OpenAI. citeturn0search0turn0search1
+The assignment asks the system to:
 
-## Architecture
+1. classify incoming customer messages into a small intent taxonomy derived from the data;
+2. draft a reply grounded in historically resolved similar issues;
+3. decide whether to auto-handle or escalate, with a stated reason;
+4. prove performance using a 150–250 example golden set, baselines, LLM-as-judge, human agreement evidence, and failure analysis.
+
+The public TWCS dataset contains tweet IDs, anonymized authors, inbound/outbound direction, timestamps, text, and response links, which allow customer/support turns to be reconstructed. citeturn0search3turn0search24
+
+## Current architecture
 
 ```text
-                    +-------------------+
-                    | Support question  |
-                    +---------+---------+
-                              |
-                              v
-                    +-------------------+
-                    | FastAPI /chat     |
-                    +---------+---------+
-                              |
-                +-------------+-------------+
-                |                           |
-                v                           v
-       +----------------+          +----------------+
-       | Retrieval      |          | Table tools    |
-       | TF-IDF         |          | account/order  |
-       | authority      |          | ticket data   |
-       +-------+--------+          +-------+--------+
-               |                           |
-               +-------------+-------------+
-                             |
-                             v
-                    +-------------------+
-                    | Evidence context  |
-                    +---------+---------+
-                              |
-                              v
-                    +-------------------+
-                    | LLM response      |
-                    | grounded policy   |
-                    +---------+---------+
-                              |
-                              v
-                    +-------------------+
-                    | Golden set        |
-                    | deterministic     |
-                    | LLM-as-judge      |
-                    +---------+---------+
-                              |
-                              v
-                    +-------------------+
-                    | Failure analysis  |
-                    +-------------------+
+TWCS CSV
+   │
+   ├── data audit
+   │      ├── quality
+   │      ├── duplicates
+   │      ├── missingness
+   │      └── brand volume
+   │
+   ▼
+Selected brand: AppleSupport
+   │
+   ▼
+Conversation reconstruction
+   │
+   ├── customer message
+   └── historical support reply
+   │
+   ▼
+Chronological train / holdout split
+   │
+   ▼
+Historical-response retrieval
+   │
+   ▼
+LLM support agent
+   ├── intent
+   ├── grounded reply
+   ├── AUTO / ESCALATE
+   └── reason + confidence
+   │
+   ▼
+Golden evaluation set
+   │
+   ├── intent metrics
+   ├── reply quality
+   ├── escalation quality
+   ├── LLM-as-judge
+   └── human-vs-judge agreement
+   │
+   ▼
+Failure analysis → V2 → re-evaluation
 ```
 
-## Evaluation philosophy
+## Why the historical-reply setup matters
 
-A single aggregate score is not enough. The evaluation should expose correctness, groundedness, completeness, relevance, policy compliance, isolation, abstention, retrieval quality, and failure categories. Easy examples must not hide failures on ambiguous, adversarial, conflicting, or unsupported requests.
+We are not training a generic chatbot on arbitrary text. A customer message is matched against previously observed customer issues and their historical brand responses. Those responses are evidence for how the brand handled similar situations, rather than instructions that the model must blindly copy.
 
-The golden set is intentionally empty until the actual assessment data and expected answers are available. Do not fabricate benchmark labels.
+The dataset is known to be noisy and conversational: response links reconstruct multi-turn interactions, and the `inbound` field distinguishes customer-directed and company-originated turns. citeturn0search3turn0search9
 
-## Run
+## Reproducible pipeline
+
+Expected dataset location:
+
+```text
+data/raw/twcs.csv
+```
+
+Prepare a bounded reproducible sample:
+
+```bash
+python scripts/prepare_twcs.py --csv data/raw/twcs.csv --brand AppleSupport --sample 5000 --seed 42
+```
+
+This creates:
+
+```text
+data/processed/support_pairs_train.jsonl
+data/processed/support_pairs_holdout.jsonl
+data/processed/dataset_summary.json
+```
+
+The split is chronological before train subsampling to reduce temporal leakage.
+
+Run the service:
 
 ```bash
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Then open `/docs` and call `POST /chat`.
+Then use `/docs` or:
 
-For evaluation:
-
-```bash
-python -m evaluation.evaluate_agent
+```text
+POST /chat
+{
+  "message": "My iPhone keeps freezing after the update"
+}
 ```
 
-For tests:
+## Evaluation plan
 
-```bash
-pytest -q
-```
+### Baseline 0 — trivial
 
-## Environment
+Always predict the most frequent intent and always escalate. This establishes a deliberately weak floor.
 
-Copy `.env.example` to `.env` and provide an API key when running the LLM-backed agent. Never commit `.env`.
+### Baseline 1 — simple
 
-## Data
+TF-IDF nearest-neighbour retrieval over historical customer messages, returning the associated historical response.
 
-Put authorized assessment assets under `data/` and `knowledge_base/`. The repository does not invent missing customer records or benchmark labels.
+### Agent V1
 
-## Current limitation
+LLM intent classification + historical-response retrieval + grounded reply drafting + escalation decision.
 
-The codebase is ready for the real assessment assets, but final data-dependent results cannot honestly be produced until the actual Hiver/ParcelPilot workbook, PDFs, and assignment-specific benchmark information are supplied. That is deliberate: evaluation numbers without the real dataset would be fabricated.
+### V2
+
+Improve only after inspecting failures. Possible changes include better retrieval, hard-negative handling, confidence calibration, multi-turn context, and intent-boundary revisions.
+
+## Golden set
+
+Target: **150–250 manually labelled examples**.
+
+Sampling will be stratified across:
+
+- common intents;
+- rare intents;
+- short/noisy messages;
+- multi-intent messages;
+- ambiguous requests;
+- messages with weak historical matches;
+- escalation-worthy cases;
+- adversarial or unsupported requests.
+
+The final labels will be created from the actual selected-brand data. The repository will not fabricate benchmark labels.
+
+## Required evaluation
+
+We will report more than one headline number:
+
+- intent accuracy / macro-F1;
+- reply correctness;
+- groundedness;
+- completeness;
+- relevance;
+- escalation precision/recall where applicable;
+- LLM-judge score;
+- human-vs-judge agreement;
+- performance by intent and difficulty bucket;
+- retrieval quality;
+- top failure modes.
+
+### Mandatory: What is misleading about my headline number?
+
+The report will explicitly test whether aggregate performance is inflated by:
+
+- dominant easy intents;
+- duplicated or near-duplicated conversations;
+- temporal leakage;
+- repeated customer templates;
+- judge bias toward fluent answers;
+- weak coverage of rare/escalation cases;
+- disagreement between human labels and the LLM judge.
+
+## Decision log
+
+Every non-obvious design choice will be recorded with the reason, alternatives considered, and expected trade-off.
+
+## Data source
+
+Primary dataset: Thought Vector's **Customer Support on Twitter** dataset on Kaggle. The dataset contains more than 3 million tweets/replies across many customer-support brands. citeturn0search0
+
+## Current status
+
+Implemented:
+
+- TWCS data loader;
+- AppleSupport selection as an initial hypothesis;
+- customer → historical-support reply reconstruction;
+- reproducible chronological preparation pipeline;
+- historical response retrieval;
+- initial intent taxonomy;
+- LLM support-agent orchestration;
+- FastAPI `/chat` and `/health` service;
+- golden-set validation;
+- duplicate/near-duplicate leakage checks;
+- evaluation framework and failure taxonomy.
+
+Next: run the actual dataset audit, revise the intent taxonomy from observed data, generate the 150–250 example golden set, implement the two required baselines, and produce the first honest V1 benchmark.
