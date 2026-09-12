@@ -1,0 +1,21 @@
+{
+  "version": "0.1",
+  "status": "initial_hypothesis",
+  "note": "These labels are starting hypotheses for AppleSupport and must be revised after dataset audit and manual review. They are not benchmark ground truth.",
+  "intents": [
+    {"id": "account_access", "description": "Apple ID, sign-in, password, verification, or account access issue."},
+    {"id": "device_problem", "description": "Hardware or device malfunction, freezing, crashing, battery, display, or physical issue."},
+    {"id": "software_problem", "description": "iOS/macOS update, settings, bugs, compatibility, or operating-system issue."},
+    {"id": "app_problem", "description": "A specific Apple or third-party app is malfunctioning or behaving unexpectedly."},
+    {"id": "purchase_billing", "description": "Purchase, charge, refund, billing, payment, or App Store transaction issue."},
+    {"id": "subscription_service", "description": "Apple service or subscription such as Apple Music, iCloud, or related service issue."},
+    {"id": "data_photos", "description": "Photos, backups, iCloud data, files, recovery, sync, or missing-data issue."},
+    {"id": "connectivity", "description": "Wi-Fi, cellular, Bluetooth, network, activation, or connectivity problem."},
+    {"id": "repair_support", "description": "Repair, replacement, warranty, service appointment, or hardware-support request."},
+    {"id": "how_to", "description": "User asks how to perform a supported task without reporting a malfunction."},
+    {"id": "security_privacy", "description": "Security, compromised account, privacy, suspicious activity, or safety concern."},
+    {"id": "feedback_thanks", "description": "Thanks, praise, complaint about support quality, or general feedback without a concrete support request."},
+    {"id": "status_outage", "description": "Service availability, outage, incident, or status question."},
+    {"id": "unknown", "description": "Insufficient information or outside the supported taxonomy."}
+  ]
+}
