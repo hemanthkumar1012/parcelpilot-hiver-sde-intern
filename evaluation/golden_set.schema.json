@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HiverSupportGoldenExample",
+  "type": "object",
+  "required": ["id", "question", "category", "expected"],
+  "properties": {
+    "id": {"type": "string"},
+    "question": {"type": "string"},
+    "category": {"type": "string"},
+    "customer_context": {"type": ["string", "null"]},
+    "expected": {
+      "type": "object",
+      "required": ["answer_points"],
+      "properties": {
+        "answer_points": {"type": "array", "items": {"type": "string"}},
+        "required_sources": {"type": "array", "items": {"type": "string"}},
+        "must_abstain": {"type": "boolean"},
+        "must_escalate": {"type": "boolean"}
+      }
+    }
+  }
+}
