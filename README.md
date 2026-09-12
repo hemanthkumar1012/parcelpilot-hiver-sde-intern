@@ -1,73 +1,71 @@
 # Hiver SDE Intern — AI Support Agent
 
-A reproducible AI customer-support system built for the Hiver take-home assignment.
+A reproducible AI customer-support system for the Hiver take-home assignment. The implementation uses the **Customer Support on Twitter (TWCS)** dataset and currently focuses on **AmazonHelp**, selected after auditing brand support volume.
 
-## Assignment framing
+## What the system must prove
 
-The system uses the **Customer Support on Twitter (TWCS)** dataset and focuses on one brand. The current first-pass choice is **AppleSupport** because the dataset contains substantial support traffic for that brand. The brand choice is a decision, not a ground-truth assumption, and will be revisited after dataset audit.
+For an incoming customer message, the system should:
 
-The assignment asks the system to:
+1. classify the message into a small intent taxonomy derived from the selected brand's data;
+2. retrieve historically similar customer issues and the support responses used for them;
+3. draft a grounded support reply rather than inventing policy;
+4. decide **AUTO** vs **ESCALATE** and provide a reason;
+5. demonstrate performance with a leakage-safe golden set, trivial and simple baselines, automated metrics, LLM-as-judge evaluation, human-vs-judge agreement, and failure analysis.
 
-1. classify incoming customer messages into a small intent taxonomy derived from the data;
-2. draft a reply grounded in historically resolved similar issues;
-3. decide whether to auto-handle or escalate, with a stated reason;
-4. prove performance using a 150–250 example golden set, baselines, LLM-as-judge, human agreement evidence, and failure analysis.
+The assignment values evidence over an impressive-looking headline score. The final report therefore includes explicit limitations and a section titled **What is misleading about my headline number?**
 
-The public TWCS dataset contains tweet IDs, anonymized authors, inbound/outbound direction, timestamps, text, and response links, which allow customer/support turns to be reconstructed. citeturn0search3turn0search24
-
-## Current architecture
+## Architecture
 
 ```text
-TWCS CSV
-   │
-   ├── data audit
-   │      ├── quality
-   │      ├── duplicates
-   │      ├── missingness
-   │      └── brand volume
-   │
-   ▼
-Selected brand: AppleSupport
-   │
-   ▼
-Conversation reconstruction
-   │
-   ├── customer message
-   └── historical support reply
-   │
-   ▼
-Chronological train / holdout split
-   │
-   ▼
-Historical-response retrieval
-   │
-   ▼
-LLM support agent
-   ├── intent
-   ├── grounded reply
-   ├── AUTO / ESCALATE
-   └── reason + confidence
-   │
-   ▼
-Golden evaluation set
-   │
-   ├── intent metrics
-   ├── reply quality
-   ├── escalation quality
-   ├── LLM-as-judge
-   └── human-vs-judge agreement
-   │
-   ▼
-Failure analysis → V2 → re-evaluation
+TWCS (~2.8M rows in the audited file)
+        │
+        ▼
+Streaming data audit
+        │
+        ├── schema / nulls / duplicates
+        ├── inbound vs outbound
+        └── support-brand volume
+        │
+        ▼
+AmazonHelp
+        │
+        ▼
+Conversation-aware reconstruction
+        │
+        ├── customer turn
+        ├── prior context
+        └── historical AmazonHelp reply
+        │
+        ▼
+Leakage-safe train / validation / test split
+        │
+        ├── Baseline 0: majority / always-escalate
+        ├── Baseline 1: TF-IDF retrieval
+        └── Agent V1
+             ├── intent
+             ├── historical retrieval
+             ├── grounded draft
+             └── AUTO / ESCALATE + reason
+        │
+        ▼
+Golden evaluation set (150–250)
+        │
+        ├── automated metrics
+        ├── LLM-as-judge
+        ├── human-vs-judge agreement
+        └── failure analysis
+        │
+        ▼
+V2 improvements → re-evaluation
 ```
 
-## Why the historical-reply setup matters
+## Dataset audit
 
-We are not training a generic chatbot on arbitrary text. A customer message is matched against previously observed customer issues and their historical brand responses. Those responses are evidence for how the brand handled similar situations, rather than instructions that the model must blindly copy.
+The local audit found **2,811,774 tweets**, with **1,537,843 inbound customer rows** and **1,273,931 outbound support rows**. Duplicate tweet IDs were not observed. The selected brand is **AmazonHelp**, which had the largest outbound support volume in the audit: **169,840** tweets.
 
-The dataset is known to be noisy and conversational: response links reconstruct multi-turn interactions, and the `inbound` field distinguishes customer-directed and company-originated turns. citeturn0search3turn0search9
+The raw file is intentionally kept local and is never committed to Git.
 
-## Reproducible pipeline
+## Reproducible data pipeline
 
 Expected dataset location:
 
@@ -75,123 +73,127 @@ Expected dataset location:
 data/raw/twcs.csv
 ```
 
-Prepare a bounded reproducible sample:
+### 1. Audit the source
 
 ```bash
-python scripts/prepare_twcs.py --csv data/raw/twcs.csv --brand AppleSupport --sample 5000 --seed 42
+python scripts/audit_dataset.py --csv data/raw/twcs.csv
 ```
 
-This creates:
-
-```text
-data/processed/support_pairs_train.jsonl
-data/processed/support_pairs_holdout.jsonl
-data/processed/dataset_summary.json
-```
-
-The split is chronological before train subsampling to reduce temporal leakage.
-
-Run the service:
+### 2. Extract AmazonHelp customer → support pairs
 
 ```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+python scripts/prepare_twcs.py --csv data/raw/twcs.csv
 ```
 
-Then use `/docs` or:
+The extraction is streaming-based so the full 500+ MB CSV does not need to be loaded into a single pandas DataFrame.
 
-```text
-POST /chat
-{
-  "message": "My iPhone keeps freezing after the update"
-}
+### 3. Profile the extracted corpus
+
+```bash
+python scripts/profile_pairs.py
 ```
 
-## Evaluation plan
+### 4. Build deterministic modeling splits
+
+```bash
+python scripts/build_dataset.py
+```
+
+### 5. Explore candidate intents
+
+```bash
+python scripts/discover_intents.py
+```
+
+The intent-discovery output is explicitly a **working hypothesis**, not ground-truth labels. Final intent definitions will be human-reviewed and validated on held-out examples.
+
+Generated bulk datasets and evaluation reports remain local during development.
+
+## Evaluation strategy
 
 ### Baseline 0 — trivial
 
-Always predict the most frequent intent and always escalate. This establishes a deliberately weak floor.
+A deliberately weak reference system: majority-class intent prediction and always-escalate handling. This establishes the floor without pretending to solve the task.
 
 ### Baseline 1 — simple
 
-TF-IDF nearest-neighbour retrieval over historical customer messages, returning the associated historical response.
+TF-IDF nearest-neighbour retrieval over historical customer messages, returning the associated historical support response.
 
 ### Agent V1
 
-LLM intent classification + historical-response retrieval + grounded reply drafting + escalation decision.
+Intent classification + historical retrieval + grounded reply drafting + escalation decision.
 
-### V2
+### Agent V2
 
-Improve only after inspecting failures. Possible changes include better retrieval, hard-negative handling, confidence calibration, multi-turn context, and intent-boundary revisions.
+Only changes justified by observed failures, such as better retrieval, conversation context, hard-negative handling, calibrated escalation thresholds, or revised intent boundaries.
 
-## Golden set
+## Golden evaluation set
 
-Target: **150–250 manually labelled examples**.
+Target: **150–250 hand-labelled examples** sampled from the selected-brand corpus and kept isolated from training/retrieval.
 
-Sampling will be stratified across:
+Sampling will deliberately cover common and rare intents, noisy or short messages, ambiguous requests, multi-intent messages, weak historical matches, escalation-worthy cases, and unsupported/adversarial requests.
 
-- common intents;
-- rare intents;
-- short/noisy messages;
-- multi-intent messages;
-- ambiguous requests;
-- messages with weak historical matches;
-- escalation-worthy cases;
-- adversarial or unsupported requests.
+The repository will not fabricate labels or expected answers. Every benchmark example must come from the actual assessed data and its documented labelling process.
 
-The final labels will be created from the actual selected-brand data. The repository will not fabricate benchmark labels.
+## Required metrics
 
-## Required evaluation
+The final evaluation will report multiple views rather than one aggregate score:
 
-We will report more than one headline number:
-
-- intent accuracy / macro-F1;
-- reply correctness;
-- groundedness;
-- completeness;
-- relevance;
-- escalation precision/recall where applicable;
-- LLM-judge score;
+- intent accuracy and macro-F1;
+- retrieval quality;
+- reply correctness, relevance, completeness, and groundedness;
+- AUTO / ESCALATE quality;
+- LLM-as-judge score;
 - human-vs-judge agreement;
 - performance by intent and difficulty bucket;
-- retrieval quality;
-- top failure modes.
+- top failure modes with real examples.
 
-### Mandatory: What is misleading about my headline number?
+### What is misleading about my headline number?
 
-The report will explicitly test whether aggregate performance is inflated by:
-
-- dominant easy intents;
-- duplicated or near-duplicated conversations;
-- temporal leakage;
-- repeated customer templates;
-- judge bias toward fluent answers;
-- weak coverage of rare/escalation cases;
-- disagreement between human labels and the LLM judge.
+The report will explicitly examine whether the aggregate score is inflated by class imbalance, easy/repetitive messages, data leakage across conversation turns, repeated templates, judge preference for fluent answers, weak coverage of rare escalation cases, or disagreement between human labels and the LLM judge.
 
 ## Decision log
 
-Every non-obvious design choice will be recorded with the reason, alternatives considered, and expected trade-off.
+Every non-obvious engineering decision is recorded with its rationale, alternatives considered, and expected trade-off. This includes dataset/brand selection, filtering, conversation reconstruction, split strategy, retrieval design, escalation policy, evaluation sampling, and model/provider choices.
 
-## Data source
+## Current implementation status
 
-Primary dataset: Thought Vector's **Customer Support on Twitter** dataset on Kaggle. The dataset contains more than 3 million tweets/replies across many customer-support brands. citeturn0search0
+Completed in the working branch:
 
-## Current status
+- streaming TWCS audit;
+- AmazonHelp selection based on observed support volume;
+- streaming customer → AmazonHelp pair extraction;
+- extracted-corpus profiling;
+- deterministic modeling split generation;
+- data-derived intent discovery;
+- repository safeguards for raw and generated datasets;
+- AmazonHelp working intent taxonomy.
 
-Implemented:
+In progress:
 
-- TWCS data loader;
-- AppleSupport selection as an initial hypothesis;
-- customer → historical-support reply reconstruction;
-- reproducible chronological preparation pipeline;
-- historical response retrieval;
-- initial intent taxonomy;
-- LLM support-agent orchestration;
-- FastAPI `/chat` and `/health` service;
-- golden-set validation;
-- duplicate/near-duplicate leakage checks;
-- evaluation framework and failure taxonomy.
+- conversation-level reconstruction and leakage-safe splitting;
+- robust historical-reply selection when a customer turn has multiple support replies;
+- FastAPI service alignment with the new AmazonHelp dataset;
+- retrieval baseline;
+- intent baseline;
+- golden-set creation;
+- automated evaluation and LLM-as-judge agreement study;
+- failure analysis and final report.
 
-Next: run the actual dataset audit, revise the intent taxonomy from observed data, generate the 150–250 example golden set, implement the two required baselines, and produce the first honest V1 benchmark.
+## Run the service
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Then open `/docs` and call `/health` or `/chat`.
+
+The final README will include the exact benchmark command and headline results only after the leakage-safe evaluation is actually run.
